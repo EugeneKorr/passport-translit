@@ -8,10 +8,7 @@ export async function extractTextFromPDF(image: File): Promise<string> {
   });
   
   try {
-    const { data } = await worker.recognize(image, {
-      tessedit_pageseg_mode: '1',
-      tessedit_ocr_engine_mode: '1',
-    });
+    const { data } = await worker.recognize(image);
     return data.text;
   } catch (error) {
     console.error('OCR Error:', error);
