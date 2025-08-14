@@ -83,7 +83,11 @@ function App() {
           <div className="text-center">
             <p className="text-lg mb-4">📄 {image.name}</p>
             {loading ? (
-              <p className="text-blue-600">Обрабатываем документ...</p>
+              <div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                <p className="text-blue-600">Обрабатываем документ...</p>
+                <p className="text-sm text-gray-500">Это может занять до 30 секунд</p>
+              </div>
             ) : (
               <p className="text-green-600">Данные обработаны →</p>
             )}
