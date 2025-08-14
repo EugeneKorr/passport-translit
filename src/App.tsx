@@ -27,13 +27,17 @@ function App() {
       const extracted = text
         .split('\n')
         .map(line => line.trim())
-        .filter(line => /^[A-Z -]{2,}$/.test(line))
+        .filter(line => line.length > 1 && /[A-Z]/.test(line))
         .map(eng => ({ eng, rus: transliterate(eng), edited: false }));
 
       setRows(extracted);
+      
+      if (extracted.length === 0) {
+        alert('Текст не найден. Попробуйте другое изображение с более четким текстом.');
+      }
     } catch (error) {
       console.error('Ошибка при обработке файла:', error);
-      alert('Ошибка при обработке файла');
+      alert(error instanceof Error ? error.message : 'Ошибка при обработке файла');
     } finally {
       setLoading(false);
     }
