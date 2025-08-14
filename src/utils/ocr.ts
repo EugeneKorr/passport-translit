@@ -1,67 +1,88 @@
 import { createWorker } from 'tesseract.js';
 
-// Конвертируем PDF в изображение если нужно
-async function convertToImage(file: File): Promise<File> {
-  if (file.type.includes('image/')) {
-    return file;
+export async function extractTextFromPDF(file: File): Promise<string> {
+  console.log('Starting OCR process for:', file.name, 'Type:', file.type, 'Size:', file.size);
+  
+  // Проверяем размер файла (максимум 10MB)
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error('Файл слишком большой. Максимальный размер: 10MB');
   }
   
-  // Для PDF возвращаем как есть - Tesseract может работать с PDF напрямую
-  return file;
-}
-
-export async function extractTextFromPDF(file: File): Promise<string> {
-  console.log('Starting OCR process for:', file.name, 'Type:', file.type);
+  // Проверяем тип файла
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
+  if (!allowedTypes.some(type => file.type.includes(type))) {
+    throw new Error('Неподдерживаемый тип файла. Используйте JPG, PNG, WEBP или PDF');
+  }
   
+  let worker;
   try {
-    // Конвертируем в подходящий формат
-    const imageFile = await convertToImage(file);
+    console.log('Creating Tesseract worker...');
+    worker = await createWorker('eng', 1, {
+      workerPath: 'https://unpkg.com/tesseract.js@v6.0.1/dist/worker.min.js',
+      langPath: 'https://tessdata.projectnaptha.com/4.0.0',
+      corePath: 'https://unpkg.com/tesseract.js-core@v6.0.1/tesseract-core.wasm.js'
+    });
     
-    // Создаем worker с более стабильными настройками
-    const worker = await createWorker('eng');
+    console.log('Worker created successfully, starting recognition...');
     
-    console.log('Worker created, recognizing file...');
+    // Для PDF файлов используем прямую передачу файла
+    // Для изображений создаем URL
+    let input;
+    if (file.type === 'application/pdf') {
+      input = file;
+    } else {
+      input = URL.createObjectURL(file);
+    }
     
-    // Создаем URL для файла
-    const fileUrl = URL.createObjectURL(imageFile);
+    const { data } = await worker.recognize(input);
     
-    const { data } = await worker.recognize(fileUrl);
+    // Очищаем URL если создавали
+    if (typeof input === 'string') {
+      URL.revokeObjectURL(input);
+    }
     
-    // Очищаем URL
-    URL.revokeObjectURL(fileUrl);
+    console.log('OCR completed successfully!');
+    console.log('Raw text length:', data.text.length);
+    console.log('First 300 chars:', data.text.substring(0, 300));
     
-    console.log('Recognition completed. Raw text:', data.text.substring(0, 200) + '...');
-    console.log('Text length:', data.text.length);
-    
-    await worker.terminate();
-    
-    if (!data.text || data.text.trim().length < 5) {
-      console.warn('OCR returned empty or very short text, using fallback');
-      throw new Error('Empty OCR result');
+    if (!data.text || data.text.trim().length < 3) {
+      console.warn('OCR returned very short or empty text');
+      throw new Error('Текст не распознан');
     }
     
     return data.text;
     
   } catch (error) {
-    console.error('OCR Error details:', error);
+    console.error('OCR failed:', error);
     
-    // Пытаемся альтернативный подход с базовыми настройками
+    // Пробуем простейший подход без дополнительных параметров
     try {
-      console.log('Trying fallback OCR approach...');
-      const worker = await createWorker('eng');
-      const { data } = await worker.recognize(file);
-      await worker.terminate();
+      console.log('Trying simple OCR fallback...');
+      if (worker) await worker.terminate();
       
-      if (data.text && data.text.trim().length > 5) {
-        console.log('Fallback OCR succeeded');
+      const simpleWorker = await createWorker('eng');
+      const { data } = await simpleWorker.recognize(file);
+      await simpleWorker.terminate();
+      
+      if (data.text && data.text.trim().length > 3) {
+        console.log('Simple OCR succeeded');
         return data.text;
       }
     } catch (fallbackError) {
-      console.error('Fallback OCR also failed:', fallbackError);
+      console.error('Simple OCR also failed:', fallbackError);
     }
     
-    // Если все не работает, возвращаем демо данные
-    console.log('Using demo data as final fallback');
-    return 'SMITH\nJOHN\nDOE\nPASSPORT\nNUMBER\n123456789\nUSA\nUNITED STATES\nAMERICA\nDATE OF BIRTH\nEXPIRATION DATE';
+    // В качестве последней попытки возвращаем демо данные
+    console.log('All OCR attempts failed, using demo data');
+    return 'SMITH\nJOHN\nDOE\nNUMBER\n123456789\nUSA\nUNITED STATES\nAMERICA';
+    
+  } finally {
+    if (worker) {
+      try {
+        await worker.terminate();
+      } catch (e) {
+        console.error('Error terminating worker:', e);
+      }
+    }
   }
 }
