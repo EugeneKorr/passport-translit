@@ -24,16 +24,36 @@ function App() {
 
     try {
       const text = await extractTextFromPDF(file);
-      const extracted = text
+      console.log('Extracted text:', text);
+      
+      const lines = text
         .split('\n')
         .map(line => line.trim())
-        .filter(line => line.length > 1 && /[A-Z]/.test(line))
-        .map(eng => ({ eng, rus: transliterate(eng), edited: false }));
+        .filter(line => {
+          // Фильтруем строки с латинскими буквами длиной от 2 символов
+          return line.length >= 2 && 
+                 /[A-Z]/.test(line) && 
+                 !/^\d+$/.test(line) && // исключаем чисто числовые строки
+                 line !== 'PASSPORT' && // исключаем служебные слова
+                 line !== 'PASSEPORT' &&
+                 line !== 'TYPE' &&
+                 line !== 'CODE';
+        });
+
+      console.log('Filtered lines:', lines);
+      
+      const extracted = lines.map(eng => ({ 
+        eng, 
+        rus: transliterate(eng), 
+        edited: false 
+      }));
 
       setRows(extracted);
       
       if (extracted.length === 0) {
-        alert('Текст не найден. Попробуйте другое изображение с более четким текстом.');
+        alert('Текст для транслитерации не найден. Попробуйте изображение с более четким текстом имен и фамилий.');
+      } else {
+        console.log(`Найдено ${extracted.length} строк для транслитерации`);
       }
     } catch (error) {
       console.error('Ошибка при обработке файла:', error);
